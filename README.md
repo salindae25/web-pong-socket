@@ -7,10 +7,12 @@
 
 ## learn in this section | 2022-03-04 |
 
-    Implemented golang based backend using gorilla/websocket package insted of the standard package ( since standard package missing features).
+    Implemented golang based backend using gorilla/websocket package insted of the 
+    standard package ( since standard package missing features).
 
 ```go
-/* define the webSocket Upgrader read write buffer size there is no absolute value this is based on the  maximum message size you expected to send via websocket.
+/* define the webSocket Upgrader read write buffer size there is no absolute value this is based on the 
+maximum message size you expected to send via websocket.
 Note: experiment by changing these value and select value suitable.
 */
 var upgrader = websocket.Upgrader{
@@ -23,8 +25,9 @@ defer ws.Close() // this wil close connection in case of any issue  free memory
 
 ```
 
-s
-once we start listening on the websocket we will recive a byte stream we can use `websocket` package to read this stream.
+
+once we start listening on the websocket we will recive a byte stream we can use `websocket`
+package to read this stream.
 
 ```go
 type Message struct {
@@ -34,8 +37,10 @@ type Message struct {
 }
 var msg Message
 err := client.ws.ReadJSON(&msg)
- // this wil only read single message. in order to listen to all the meesage we need to insert this inside a inifinite for loop
- // here we passa pointer reference to custom Message struct to ReadJSON which will read stream and set vlue to the msg object. incase message failed to set value it will throw an error
+ // this wil only read single message. in order to listen to all the meesage we need to insert this
+ inside a inifinite for loop
+ // here we passa pointer reference to custom Message struct to ReadJSON which will read stream and set value
+ to the msg object. incase message failed to set value it will throw an error
 ```
 
     from here once we read the message from socket we can process mesage and take action
