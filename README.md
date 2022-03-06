@@ -1,3 +1,5 @@
+## Phase-1
+
 - App to communicate between frontend and go backend
   1. send set of message from single client one after from frontend [Phase 1]
      - build go based backend to implement web socket
@@ -49,7 +51,8 @@ err := client.ws.ReadJSON(&msg)
 
 2020-03-06
 
-Learn the concept of attaching the method or `func` to a `struct` in golang.it could be used similar to `this` keyword in other language.
+Learn the concept of attaching the method or `func` to a `struct` in golang.it could be used similar to
+`this` keyword in other language.
 
 ```go
 func (m *Message) post() {
@@ -68,3 +71,12 @@ func (m Message) post(){}
 ```
 
 above concept reorganized code.
+
+---
+
+## Phase-2
+
+1. render set of elements in canvas based on the streamed from backend.
+   - when user input shape in text in frontend send it to backend and draw corresponding image
+     using backend generated values.
+   - based on the key input calculate next state of the object and render it on front end.
