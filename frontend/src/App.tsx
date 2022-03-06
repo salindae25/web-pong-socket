@@ -26,24 +26,27 @@ function App() {
   const handleSocketMessage = (msg) => {
     const data = JSON.parse(msg);
     switch (data?.type) {
-      case "newJoin":
+      case "USER_NAME":
         addUser(data);
         // add to user list  and decide random color
         break;
-      case "msg":
+      case "MESSAGE":
         addNewMessage(data);
         // add message to message list
         break;
+      case "NEW_USER":
+        addUser(data);
       default:
+        addNewMessage(data);
         break;
     }
   };
 
   const addUser = (data) => {
-    const color = randomColor(data.userName);
+    const color = randomColor(data.content);
     setUserList((prev) => {
       const users = { ...prev };
-      users[data.userName] = color;
+      users[data.content] = color;
       return users;
     });
   };
@@ -55,7 +58,7 @@ function App() {
     socket?.send(
       JSON.stringify({
         content: e.target.querySelector("[name='message']").value,
-        type: "msg",
+        type: "MESSAGE",
       })
     );
     e.target.querySelector("[name='message']").value = "";
@@ -68,13 +71,13 @@ function App() {
         <EntryForm handleSubmit={handleSubmit} />
         <div className="row-start-1 row-span-6  h-5/6 flex flex-col gap-4 w-full overflow-y-scroll scroll-m-1 pt-2">
           {messageArray
-            .filter((y) => y?.type === "msg")
+            //.filter((y) => y?.type === "msg")
             .map((x) => {
               return (
                 <div
                   key={x?.content}
                   className="px-2 py-1  shadow-md w-4/6 rounded-md mx-2 font-medium text-yellow-200 capitalize"
-                  style={{ background: userList[x.userName] }}
+                  style={{ background: userList[x?.userName] }}
                 >
                   {x?.content}
                 </div>
