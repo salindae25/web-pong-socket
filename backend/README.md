@@ -40,3 +40,15 @@ sequenceDiagram
 
     deactivate s
 ```
+
+### Canvas state managed in backend
+
+- Message Types:
+
+  - INITIAL_CONN (outgoing)
+    - send current state of canvas
+  - LEAVE
+    - exit client from connection and notify others
+  - GAME_STATE (from server to client)
+  - MESSAGE (from client to server)
+  - GAME_CMD (from client to server)
