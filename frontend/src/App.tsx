@@ -1,9 +1,12 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { wsConnection } from "./service";
 import { EntryForm } from "./component/EntryForm";
 import { WsLinkContext } from "./GlobalContext";
 import { useEventListener } from "./hooks/useEvents";
-function randomColor(str) {
+import { GameBoard } from "./component/GameBoard";
+import { ChatArea } from "./component/ChatArea";
+import { UserList as UserArea } from "./component/UserList";
+function randomColor(str: string) {
   var hash = 0;
   for (var i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -15,30 +18,35 @@ function randomColor(str) {
   }
   return colour;
 }
-const ESCAPE_KEYS = ["a", "A", "d", "D", "40", "ArrowUp", "38", "ArrowDown"];
+const ESCAPE_KEYS = ["KeyW", "KeyS", "ArrowUp", "ArrowDown", "Space"];
 function App() {
-  const [messageArray, setMessageArry] = useState<any[]>([]);
+  const [messageArray, setMessageArray] = useState<any[]>([]);
   const [userList, setUserList] = useState<any>({});
-  const [ball, setBall] = useState({ x: 100, y: 75, radius: 50 });
+  const [view, setView] = useState({
+    Ball: { x: 200, y: 200, radius: 10 },
+    Player1: { x: 2, y: 150 },
+    Player2: { x: 378, y: 150 },
+  });
   const { ws: socket, msg } = useContext(WsLinkContext);
-  function handler({ key }) {
-    console.log(key);
+  useEventListener("keydown", handler);
 
-    if (ESCAPE_KEYS.includes(String(key))) {
+  function handler(e: { key: any; code: any }) {
+    const { key, code } = e;
+    if (ESCAPE_KEYS.includes(String(code))) {
       socket?.send(
         JSON.stringify({
-          content: key.toUpperCase(),
+          content: code.toUpperCase(),
           type: "GAME_CMD",
         })
       );
     }
   }
 
-  useEventListener("keydown", handler);
   useEffect(() => {
     handleSocketMessage(msg);
   }, [msg]);
-  const handleSocketMessage = (msg) => {
+
+  const handleSocketMessage = (msg: string) => {
     const data = JSON.parse(msg);
     switch (data?.type) {
       case "USER_NAME":
@@ -62,28 +70,34 @@ function App() {
         break;
     }
   };
-  const removeUser = (data) => {
-    setUserList((prev) => {
-      const users = { ...prev };
-      console.log(data?.content + " removed");
 
+  const removeUser = (data: { content: string }) => {
+    setUserList((prev: any) => {
+      const users = { ...prev };
       delete users[data.content];
       return users;
     });
   };
-  const addUser = (data) => {
+
+  const addUser = (data: { content: string }) => {
     const color = randomColor(data.content);
-    setUserList((prev) => {
+    setUserList((prev: any) => {
       const users = { ...prev };
       users[data.content] = color;
       return users;
     });
   };
-  const addNewMessage = (data) => {
-    setMessageArry((prev) => [...prev, data]);
+
+  const addNewMessage = (data: any) => {
+    setMessageArray((prev) => [...prev, data]);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: {
+    preventDefault: () => void;
+    target: {
+      querySelector: (arg0: string) => { (): any; new (): any; value: string };
+    };
+  }) => {
     e.preventDefault();
     socket?.send(
       JSON.stringify({
@@ -94,85 +108,25 @@ function App() {
     e.target.querySelector("[name='message']").value = "";
   };
 
-  const drawElement = (data) => {
-    const element = data?.state?.element;
+  const drawElement = (data: { state: any }) => {
+    const element = data?.state;
     if (!element) return;
-    setBall({
-      x: element.position.x,
-      y: element.position.y,
-      radius: element.radius,
-    });
+    setView({ ...element });
   };
 
   return (
     <div className="bg-slate-50 h-screen grid grid-cols-12 py-4 px-20">
       <div className="col-start-1 col-span-5 h-full">
-        <GameBoard height={400} width={400} ball={ball} />
+        <GameBoard height={400} width={400} state={view} />
       </div>
-      <div className=" grid grid-rows-6  col-start-6 col-span-4 bg-slate-300 rounded-lg ">
-        <EntryForm handleSubmit={handleSubmit} />
-        <div className="row-start-1 row-span-6  h-5/6 flex flex-col gap-4 w-full overflow-y-scroll scroll-m-1 pt-2">
-          {messageArray
-            //.filter((y) => y?.type === "msg")
-            .map((x) => {
-              return (
-                <div
-                  key={x?.content}
-                  className="px-2 py-1  shadow-md w-4/6 rounded-md mx-2 font-medium text-yellow-200 capitalize"
-                  style={{ background: userList[x?.userName] }}
-                >
-                  {x?.content}
-                </div>
-              );
-            })}
-        </div>
-      </div>
-      <div className="col-start-10 col-span-2 flex flex-col gap-4 bg-red-200 px-4 py-4">
-        {Object.keys(userList).map((x) => {
-          return (
-            <div
-              className="font-medium text-yellow-200 rounded-md p-3 flex w-full items-center"
-              style={{ background: userList[x] }}
-            >
-              <span className="w-full">{x}</span>
-              <span className="w-2 h-2 bg-green-400 rounded-full border border-yellow-200"></span>
-            </div>
-          );
-        })}
-      </div>
+      <ChatArea
+        handleSubmit={handleSubmit}
+        messageArray={messageArray}
+        userList={userList}
+      />
+      <UserArea userMap={userList} />
     </div>
   );
 }
 
 export default App;
-
-function GameBoard({
-  height,
-  width,
-  ball,
-}: {
-  height: number;
-  width: number;
-  ball?: any;
-}) {
-  const canvasRef = useRef<any>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "gray";
-    ctx.fillRect(0, 0, 400, 400);
-  }, []);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (ball) {
-      ctx.clearRect(0, 0, 400, 400);
-      ctx.fillStyle = "gray";
-      ctx.fillRect(0, 0, 400, 400);
-      ctx.beginPath();
-      ctx.arc(ball.x, ball.y, ball.radius, 0, 2 * Math.PI);
-      ctx.stroke();
-    }
-  }, [ball]);
-  return <canvas ref={canvasRef} id="canvas" height={height} width={width} />;
-}

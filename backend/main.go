@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/salindae25/web-pong/backend/pkg/pong"
 )
 
 type InputMessage struct {
@@ -18,34 +18,35 @@ type InputMessage struct {
 	Content  string `json:"content"`
 }
 type OutMessage struct {
-	Type  string    `json:"type"`
-	State GameBoard `json:"state"`
+	Type  string        `json:"type"`
+	State pong.GameSend `json:"state"`
 }
 type Position struct {
 	X float32 `json:"x"`
 	Y float32 `json:"y"`
 }
-type Ball struct {
-	Position  `json:"position"`
-	Radius    float32 `json:"radius"`
-	XVelocity float32 `json:"xVelocity"`
-	YVelocity float32 `json:"yVelocity"`
-	Color     string  `json:"color"`
-}
+
 type Command struct {
 	key string
 }
-type GameBoard struct {
-	Element Ball `json:"element"`
-}
+
 type Client struct {
 	username string
 	id       string
 	ws       *websocket.Conn
 	command  chan Command
 }
+type Room struct {
+	GameBoard *pong.Game
+}
 
-var game = GameBoard{}
+var postchannel = make(chan bool)
+var game = pong.Game{
+	Post: postchannel,
+}
+var room = Room{
+	GameBoard: &game,
+}
 var universalCommand = make(chan Command)
 var clients []*Client
 var messages []*InputMessage
@@ -53,65 +54,10 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
-var frequency = 36
-
-const (
-	initBallVelocity = 5.0
-	initPaddleSpeed  = 10.0
-	speedUpdateCount = 6
-	speedIncrement   = 0.5
-)
-
-var (
-	BgColor  = color.Black
-	ObjColor = color.RGBA{120, 226, 160, 255}
-)
-
-const (
-	windowWidth  = 400
-	windowHeight = 400
-)
-const (
-	InitBallRadius = 10.0
-)
-
-func (b *Ball) Update() {
-	h := windowHeight
-	w := windowWidth
-	b.X += b.XVelocity
-	b.Y += b.YVelocity
-
-	// bounce off edges when getting to top/bottom
-	if b.Y-b.Radius > float32(h) {
-		b.YVelocity = -b.YVelocity
-		b.Y = float32(h) - b.Radius
-	} else if b.Y+b.Radius < 0 {
-		b.YVelocity = -b.YVelocity
-		b.Y = b.Radius
-	}
-	if b.X-b.Radius > float32(w) {
-		b.XVelocity = -b.XVelocity
-		b.X = float32(w) - b.Radius
-	} else if b.X+b.Radius < 0 {
-		b.XVelocity = -b.XVelocity
-		b.X = b.Radius
-	}
-	// // bounce off paddles
-	// if b.X-b.Radius < leftPaddle.X+float32(leftPaddle.Width/2) &&
-	// 	b.Y > leftPaddle.Y-float32(leftPaddle.Height/2) &&
-	// 	b.Y < leftPaddle.Y+float32(leftPaddle.Height/2) {
-	// 	b.XVelocity = -b.XVelocity
-	// 	b.X = leftPaddle.X + float32(leftPaddle.Width/2) + b.Radius
-	// } else if b.X+b.Radius > rightPaddle.X-float32(rightPaddle.Width/2) &&
-	// 	b.Y > rightPaddle.Y-float32(rightPaddle.Height/2) &&
-	// 	b.Y < rightPaddle.Y+float32(rightPaddle.Height/2) {
-	// 	b.XVelocity = -b.XVelocity
-	// 	b.X = rightPaddle.X - float32(rightPaddle.Width/2) - b.Radius
-	// }
-}
+var frequency = 20
 
 //--- Game --- //
-func GameLoop(update func(), post func(), delay time.Duration) chan bool {
+func GameLoop(update func(), post func(), broad func(), delay time.Duration) chan bool {
 	stop := make(chan bool)
 	go func() {
 		for {
@@ -127,47 +73,55 @@ func GameLoop(update func(), post func(), delay time.Duration) chan bool {
 	go func() {
 		for {
 			update()
-
+		}
+	}()
+	go func() {
+		for {
+			broad()
 		}
 	}()
 	return stop
 }
-func (g *GameBoard) Update(command chan Command) {
 
-	press := <-command
-	key := press.key
-	switch key {
-	case "ARROWUP":
-		g.Element.Y -= 10
-	case "ARROWDOWN":
-		g.Element.Y += 10
-	case "A":
-		g.Element.X -= 10
-	case "D":
-		g.Element.X += 10
-	}
-
-}
-func (g *GameBoard) Post() {
-	for _, client := range clients {
-		err := client.ws.WriteJSON(OutMessage{Type: "GAME_STATE", State: *g})
-		if err != nil {
-			log.Printf("ERROR:%+v", err)
-		}
-	}
-}
-func (g *GameBoard) RunGame(command chan Command) chan bool {
+func (r *Room) RunGame(command chan Command) chan bool {
 	update := func() {
-		g.Update(command)
+		fmt.Println("update inside RunGame")
+		press := <-command
+		key := press.key
+		r.GameBoard.Update(key)
 
 	}
 
 	post := func() {
-		g.Element.Update()
-		g.Post()
+		if r.GameBoard.State == pong.PlayState {
+			r.GameBoard.Draw()
+		}
 
 	}
-	return GameLoop(update, post, time.Duration(frequency)*time.Millisecond)
+	broad := func() {
+		if <-postchannel {
+			r.Post()
+		}
+
+	}
+	return GameLoop(update, post, broad, time.Duration(frequency)*time.Millisecond)
+}
+func (r *Room) Post() {
+	gameVar := pong.GameSend{
+		State:    r.GameBoard.State,
+		Ball:     r.GameBoard.Ball,
+		Player1:  r.GameBoard.Player1,
+		Player2:  r.GameBoard.Player2,
+		Rally:    r.GameBoard.Rally,
+		Level:    r.GameBoard.Level,
+		MaxScore: r.GameBoard.MaxScore,
+	}
+	for _, client := range clients {
+		err := client.ws.WriteJSON(OutMessage{Type: "GAME_STATE", State: gameVar})
+		if err != nil {
+			log.Printf("ERROR:%+v", err)
+		}
+	}
 }
 
 //---- InputMessage ----//
@@ -211,17 +165,9 @@ func handleIncomeInputMessage(client *Client, m InputMessage) {
 		}
 		newMsgToClient.broadCastTo(client)
 
-		if len(clients) == 1 {
-			game.Element = Ball{
-				Position: Position{
-					X: float32(windowWidth / 2),
-					Y: float32(windowHeight / 2)},
-				Radius:    InitBallRadius,
-				Color:     fmt.Sprintf("%+v", ObjColor),
-				XVelocity: initBallVelocity,
-				YVelocity: initBallVelocity,
-			}
-			game.RunGame(universalCommand)
+		if len(clients) == 0 {
+			room.GameBoard.Init()
+			room.RunGame(universalCommand)
 		}
 
 	case "LEAVE":
